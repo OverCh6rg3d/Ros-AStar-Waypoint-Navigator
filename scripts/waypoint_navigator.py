@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+import rospy
+import math
+from tf.transformations import euler_from_quaternion
+
+# Twist for robot linear & angular velocity
+from geometry_msgs.msg import Twist
+# Odometry for localization
+from nav_msgs.msg import Odometry
+
+
+# custom service
+from waypoint_nav.srv import AddWayPoint, AddWayPointResponse
+
+class WaypointNavigator:
+    def __init__(self):
+        rospy.init_node('waypoint_navigator_node', anonymous=True)
+        
+        # publishes linear and angular velocities
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        # listens for pose of robot (sent by gazebo)
+        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
+        
+        # service server
+        self.waypoint_service = rospy.Service('/add_waypoint', AddWayPoint, self.handle_add_waypoint)
+        
+        # state variables
+        self.current_x = 0.0
+        self.current_y = 0.0
+        self.current_yaw = 0.0
+        self.waypoints_queue = []
+        self.is_moving = False
+        
+        rospy.loginfo("Waypoint Navigator Node Started. Waiting for waypoints...")
+
+    def odom_callback(self, msg):
+        """ Continuously updates the robot's current position and rotation """
+        self.current_x = msg.pose.pose.position.x
+        self.current_y = msg.pose.pose.position.y
+        
+        # converting to Euler angles (roll, pitch, yaw) from quaternion
+        orientation_q = msg.pose.pose.orientation
+        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
+        
+        # only Z-axis rotation is neccessary
+        self.current_yaw = yaw
+
+    def handle_add_waypoint(self, req):
+        """ Triggered whenever the /add_waypoint service is called """
+        new_waypoint = (req.x, req.y)
+        self.waypoints_queue.append(new_waypoint)
+        
+        rospy.loginfo(f"New waypoint added: X={req.x}, Y={req.y}")
+        return AddWayPointResponse(success=True, message="Waypoint queued successfully.")
+
+    def calculate_velocity_command(self, target_x, target_y):
+        """ Calculates the Twist message needed to drive toward a target coordinate. """
+        cmd = Twist()
+
+        dx = target_x - self.current_x
+        dy = target_y - self.current_y
+        
+        distance = math.hypot(dx, dy)
+        target_angle = math.atan2(dy, dx)
+        
+        angle_error = target_angle - self.current_yaw
+        # normalizing between -pi and pi
+        angle_error = math.atan2(math.sin(angle_error), math.cos(angle_error))
+        
+        # target must be within 0.1 m
+        if distance < 0.1:
+            return cmd, True  # Returns an empty (stop) command and a "True" success flag
+            
+        # Proportional control for movement
+        cmd.angular.z = 1.5 * angle_error
+        
+        # Only drive forward if we are facing the right direction
+        if abs(angle_error) < 0.5:
+            cmd.linear.x = 0.5 * distance
+            # Cap the max speed
+            if cmd.linear.x > 0.22: 
+                cmd.linear.x = 0.22
+        else:
+            cmd.linear.x = 0.0
+            
+        return cmd, False # Returns the movement command and a "False" success flag
+
+    def navigate_loop(self):
+        """ The main control loop running at 10Hz """
+        rate = rospy.Rate(10)
+        
+        while not rospy.is_shutdown():
+            if self.waypoints_queue:
+                target_x, target_y = self.waypoints_queue[0]
+                
+                # perform movement command and check if goal reached
+                cmd, target_reached = self.calculate_velocity_command(target_x, target_y)
+                
+                if target_reached:
+                    rospy.loginfo(f"Waypoint reached! Removing ({target_x}, {target_y}) from queue.")
+                    self.waypoints_queue.pop(0)
+                
+                # publish velocity command for the robot
+                self.cmd_vel_pub.publish(cmd)
+                
+            else:
+                # robot stops if no target
+                stop_msg = Twist()
+                self.cmd_vel_pub.publish(stop_msg)
+                
+            rate.sleep()
+
+if __name__ == '__main__':
+    try:
+        navigator = WaypointNavigator()
+        navigator.navigate_loop()
+    except rospy.ROSInterruptException:
+        pass
