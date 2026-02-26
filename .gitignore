@@ -1,0 +1,19 @@
+# Python caches & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE configurations
+.vscode/
+
+# OS & Linux Editor generated files
+.DS_Store
+*~
+*.swp
+*.swo
+
+# ROS/Catkin failsafes (in case of accidental local builds)
+build/
+devel/
+install/
+.catkin_workspace
