@@ -5,7 +5,18 @@
         <arg name="model" value="$(arg model)"/>
     </include>
 
-    <node pkg="waypoint_nav" type="local_mapper.py" name="local_mapper_node" output="screen" />
+    <node pkg="waypoint_nav" type="local_mapper.py" name="local_mapper_node" output="screen">
+        <param name="resolution" value="0.05" />
+        <param name="width" value="200" />
+        <param name="height" value="200" />
+        <param name="robot_radius" value="0.15" /> </node>
 
-    <node pkg="waypoint_nav" type="waypoint_navigator.py" name="waypoint_navigator_node" output="screen" />
+    <node pkg="waypoint_nav" type="waypoint_navigator.py" name="waypoint_navigator_node" output="screen">
+        <param name="max_linear_speed" value="0.15" />
+        <param name="turn_speed_multiplier" value="1.5" />
+        <param name="forward_speed_multiplier" value="0.5" />
+        <param name="goal_tolerance" value="0.1" />
+        <param name="stuck_timeout" value="3.0" />
+        <param name="stuck_distance" value="0.05" />
+    </node>
 </launch>
