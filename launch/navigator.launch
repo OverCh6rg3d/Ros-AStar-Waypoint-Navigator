@@ -1,18 +1,32 @@
 <launch>
     <arg name="model" default="burger" doc="model type [burger, waffle, waffle_pi]"/>
+    
+    <arg name="x_pos" default="-3.267"/> 
+    <arg name="y_pos" default="0.733"/>
+    <arg name="z_pos" default="0.0"/>
 
-    <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch">
-        <arg name="model" value="$(arg model)"/>
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find waypoint_nav)/worlds/test_maze.world"/>
+        <arg name="paused" value="false"/>
+        <arg name="use_sim_time" value="true"/>
+        <arg name="gui" value="true"/>
+        <arg name="headless" value="false"/>
+        <arg name="debug" value="false"/>
     </include>
+
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+
+    <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model) -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
 
     <node pkg="waypoint_nav" type="local_mapper.py" name="local_mapper_node" output="screen">
         <param name="resolution" value="0.05" />
         <param name="width" value="200" />
         <param name="height" value="200" />
-        <param name="robot_radius" value="0.15" /> </node>
+        <param name="robot_radius" value="0.15" />
+    </node>
 
     <node pkg="waypoint_nav" type="waypoint_navigator.py" name="waypoint_navigator_node" output="screen">
-        <param name="max_linear_speed" value="0.15" />
+        <param name="max_linear_speed" value="0.22" />
         <param name="turn_speed_multiplier" value="1.5" />
         <param name="forward_speed_multiplier" value="0.5" />
         <param name="goal_tolerance" value="0.1" />
